@@ -4,6 +4,12 @@ chcp 65001 > nul
 title LALGONDAR(8-1)converter // Rhino 8 to 7 Down-Converter
 mode con: cols=105 lines=38
 
+:: If compiled standalone EXE exists, run it directly (no Python needed!)
+if exist "%~dp0LALGONDAR_CONVERTER.exe" (
+    "%~dp0LALGONDAR_CONVERTER.exe" %*
+    exit /b %errorlevel%
+)
+
 :: Locate Python script
 set "SCRIPT_PATH=%~dp0lalgondar_converter.py"
 if not exist "%SCRIPT_PATH%" (

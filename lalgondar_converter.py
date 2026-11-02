@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
 ===============================================================================
-       LALGONDAR(8-1)converter - Standalone Rhino 8 to 7 Down-Converter
+       LALGONDAR (Any-to-Any) Rhino Converter - Version 2.0.0
+               Developed & Designed by Shovan Lal Sarker
                Red & White High-Contrast Dark Terminal Edition
 ===============================================================================
-Powered by rhino3dm (OpenNURBS). Converts Rhino 8 .3dm archives down to
-Rhino 7 format without requiring Rhinoceros to be installed.
+Universal Rhino Archive Converter powered by rhino3dm (OpenNURBS).
+Converts any Rhino .3dm file (Rhino 2, 3, 4, 5, 6, 7, 8) to ANY Rhino version
+(Rhino 2 through 8), up or down, without requiring Rhinoceros to be installed.
+
+Copyright (c) 2026 Shovan Lal Sarker. All rights reserved.
+===============================================================================
 """
 
 from __future__ import annotations
@@ -20,6 +25,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+APP_NAME = "LALGONDAR(Any-to-Any)converter"
+APP_VERSION = "2.0.0"
+AUTHOR = "Shovan Lal Sarker"
+COPYRIGHT = f"Copyright (c) 2026 {AUTHOR}"
+
 # Enable Virtual Terminal Processing for ANSI colors on Windows CMD
 if os.name == "nt":
     try:
@@ -27,7 +37,6 @@ if os.name == "nt":
         h_stdout = kernel32.GetStdHandle(-11)
         mode = ctypes.c_ulong()
         kernel32.GetConsoleMode(h_stdout, ctypes.byref(mode))
-        # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
         kernel32.SetConsoleMode(h_stdout, mode.value | 0x0004 | 0x0001 | 0x0002)
     except Exception:
         pass
@@ -48,6 +57,24 @@ except ImportError:
         file=sys.stderr,
     )
     sys.exit(1)
+
+
+# =============================================================================
+# RED & WHITE ANSI COLOR PALETTE
+# =============================================================================
+R_BOLD = "\033[1;91m"          # Bright Neon Red
+R_MED  = "\033[38;2;239;68;68m" # Vibrant Crimson Red
+R_DARK = "\033[38;2;185;28;28m" # Deep Blood Red
+R_BG   = "\033[48;2;185;28;28m\033[1;97m" # Red Background with Bright White Text
+W_BOLD = "\033[1;97m"          # Pure Glossy White
+W_MED  = "\033[38;2;241;245;249m" # Crisp Off-White
+GRAY   = "\033[38;2;148;163;184m" # Soft Slate Silver
+D_GRAY = "\033[38;2;71;85;105m"  # Dark Muted Border
+RESET  = "\033[0m"
+
+SUPPORTED_VERSIONS = [2, 3, 4, 5, 6, 7, 8]
+DEFAULT_TARGET_VERSION = 7
+
 
 @dataclass
 class AuditRecord:
@@ -132,15 +159,24 @@ def inspect_model_objects(model: rhino3dm.File3dm) -> Dict[str, int]:
 def convert_file(
     input_path: Path,
     output_dir: Optional[Path] = None,
-    suffix: str = "_v7",
+    target_version: int = DEFAULT_TARGET_VERSION,
+    suffix: Optional[str] = None,
     force: bool = False,
     overwrite: bool = True,
 ) -> AuditRecord:
     """
-    Down-converts a single Rhino .3dm file to Rhino 7 format.
-    Validates original archive version and avoids overwriting original file.
+    Converts a single Rhino .3dm file from ANY version to ANY target version (2 through 8).
+    Validates version and protects original source files from overwrite.
     """
     record = AuditRecord(input_path=input_path)
+
+    if target_version not in SUPPORTED_VERSIONS:
+        record.status = "FAILED"
+        record.message = f"Unsupported target version: {target_version}. Supported: {SUPPORTED_VERSIONS}"
+        return record
+
+    if suffix is None:
+        suffix = f"_v{target_version}"
 
     if not input_path.exists():
         record.status = "FAILED"
@@ -207,7 +243,8 @@ def convert_file(
     record.orig_archive_version = archive_version
     record.orig_major_version = parse_major_version(archive_version)
 
-    if record.orig_major_version <= 7 and not force:
+    # Pre-check: skip if source version is already identical to target version
+    if record.orig_major_version == target_version and not force:
         record.status = "SKIPPED"
         record.message = (
             f"Already version {record.orig_major_version} (Archive: {archive_version}). "
@@ -234,15 +271,16 @@ def convert_file(
         return record
 
     try:
-        write_success = model.Write(str(output_path), version=7)
+        # Write to requested target version
+        write_success = model.Write(str(output_path), version=target_version)
     except Exception as exc:
         record.status = "FAILED"
-        record.message = f"Exception writing Rhino 7 file: {exc}"
+        record.message = f"Exception writing Rhino {target_version} file: {exc}"
         return record
 
     if not write_success:
         record.status = "FAILED"
-        record.message = "model.Write(..., version=7) returned False."
+        record.message = f"model.Write(..., version={target_version}) returned False."
         return record
 
     t_end = time.perf_counter()
@@ -256,26 +294,23 @@ def convert_file(
                 record.new_archive_version = verified_model.ArchiveVersion
                 record.new_major_version = parse_major_version(record.new_archive_version)
             else:
-                record.new_archive_version = 70
-                record.new_major_version = 7
+                record.new_archive_version = target_version * 10
+                record.new_major_version = target_version
         else:
             record.status = "FAILED"
             record.message = "Written file not found on disk after write."
             return record
     except Exception:
-        record.new_archive_version = 70
-        record.new_major_version = 7
+        record.new_archive_version = target_version * 10
+        record.new_major_version = target_version
 
     record.status = "SUCCESS"
-    record.message = "Converted successfully to Rhino 7."
+    record.message = f"Converted successfully to Rhino {target_version}."
     return record
 
 
 def parse_raw_input_paths(raw_input: str) -> List[str]:
-    """
-    Safely parses single or multiple file paths from interactive input,
-    handling Windows Explorer drag-and-drop quotes and whitespace.
-    """
+    """Safely parse input paths handling quotes, spaces, and Windows drag-and-drop."""
     import re
     cleaned = raw_input.strip()
     if not cleaned:
@@ -301,11 +336,12 @@ def parse_raw_input_paths(raw_input: str) -> List[str]:
 
 
 def collect_target_files(
-    inputs: List[str], recursive: bool = True
+    inputs: List[str], recursive: bool = True, target_version: int = DEFAULT_TARGET_VERSION
 ) -> Tuple[List[Path], List[str]]:
     """Collect and validate target .3dm files."""
     collected: List[Path] = []
     errors: List[str] = []
+    suffix_filter = f"_v{target_version}"
 
     for raw in inputs:
         clean = raw.strip().strip('"').strip("'")
@@ -325,7 +361,8 @@ def collect_target_files(
             pattern = "**/*.3dm" if recursive else "*.3dm"
             for f in p.glob(pattern):
                 if f.is_file():
-                    if f.stem.endswith("_v7"):
+                    # Skip previously converted files matching current target suffix
+                    if f.stem.endswith(suffix_filter):
                         continue
                     collected.append(f)
 
@@ -342,27 +379,14 @@ def collect_target_files(
 
     return unique_files, errors
 
-# =============================================================================
-# RED & WHITE ANSI COLOR PALETTE
-# =============================================================================
-R_BOLD = "\033[1;91m"          # Bright Neon Red
-R_MED  = "\033[38;2;239;68;68m" # Vibrant Crimson Red
-R_DARK = "\033[38;2;185;28;28m" # Deep Blood Red
-R_BG   = "\033[48;2;185;28;28m\033[1;97m" # Red Background with Bright White Text
-W_BOLD = "\033[1;97m"          # Pure Glossy White
-W_MED  = "\033[38;2;241;245;249m" # Crisp Off-White
-GRAY   = "\033[38;2;148;163;184m" # Soft Slate Silver
-D_GRAY = "\033[38;2;71;85;105m"  # Dark Muted Border
-RESET  = "\033[0m"
-
 
 def clear_screen() -> None:
     """Clear console screen."""
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def print_banner() -> None:
-    """Render the high-impact LALGONDAR(8-1)converter Red & White ASCII Art Logo."""
+def print_banner(target_version: int = DEFAULT_TARGET_VERSION) -> None:
+    """Render the high-impact LALGONDAR v2.0 Red & White ASCII Art Logo."""
     banner = f"""{R_BOLD}
    ██╗      █████╗ ██╗      ██████╗  ██████╗ ███╗   ██╗██████╗  █████╗ ██████╗ 
    ██║     ██╔══██╗██║     ██╔════╝ ██╔═══██╗████╗  ██║██╔══██╗██╔══██╗██╔══██╗
@@ -370,12 +394,32 @@ def print_banner() -> None:
    ██║     ██╔══██║██║     ██║   ██║██║   ██║██║╚██╗██║██║  ██║██╔══██║██╔══██╗
    ███████╗██║  ██║███████╗╚██████╔╝╚██████╔╝██║ ╚████║██████╔╝██║  ██║██║  ██║
    ╚══════╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝{RESET}
-                {R_BG}  (8-1) CONVERTER  {RESET}  {W_BOLD}v1.0.0 // RHINO ARCHIVE ENGINE{RESET}
+            {R_BG}  ANY-TO-ANY CONVERTER  {RESET}  {W_BOLD}v{APP_VERSION} // UNIVERSAL RHINO ARCHIVE{RESET}
     {D_GRAY}─────────────────────────────────────────────────────────────────────────────────{RESET}
-    {W_BOLD}CORE ENGINE:{RESET} {R_BOLD}rhino3dm v{rhino3dm.__version__}{RESET}   {W_BOLD}TARGET:{RESET} {W_MED}Rhino 70 (v7){RESET}   {W_BOLD}SAFE MODE:{RESET} {R_BOLD}SOURCE IMMUNE{RESET}
+    {W_BOLD}DEVELOPER:{RESET} {R_BOLD}{AUTHOR}{RESET}   {W_BOLD}TARGET:{RESET} {W_BOLD}Rhino {target_version}.x{RESET}   {W_BOLD}ENGINE:{RESET} {W_MED}rhino3dm v{rhino3dm.__version__}{RESET}
     {D_GRAY}─────────────────────────────────────────────────────────────────────────────────{RESET}
 """
     print(banner)
+
+
+def print_credit_block() -> None:
+    """Render the author credit and copyright block at the very end."""
+    box_w = 78
+    top  = f"{R_MED}╔" + "═" * (box_w - 2) + f"╗{RESET}"
+    sep  = f"{R_MED}╠" + "═" * (box_w - 2) + f"╣{RESET}"
+    bot  = f"{R_MED}╚" + "═" * (box_w - 2) + f"╝{RESET}"
+    line = f"{R_MED}║{RESET}"
+
+    credit_line = f" {W_BOLD}DEVELOPED & ARCHITECTED BY:{RESET} {R_BOLD}{AUTHOR.upper()}{RESET} "
+    title_line  = f" {W_MED}{APP_NAME} v{APP_VERSION}  •  {COPYRIGHT}{RESET} "
+    rhino_line  = f" {GRAY}Universal CAD OpenNURBS Engine (Rhino 2, 3, 4, 5, 6, 7, 8 Compatible){RESET} "
+
+    print("\n" + top)
+    print(f"{line} {credit_line:<86}{line}")
+    print(sep)
+    print(f"{line} {title_line:<86}{line}")
+    print(f"{line} {rhino_line:<86}{line}")
+    print(bot + "\n")
 
 
 def print_single_card_red_white(rec: AuditRecord) -> None:
@@ -392,7 +436,6 @@ def print_single_card_red_white(rec: AuditRecord) -> None:
 
     print("\n" + top)
     header_text = f" {W_BOLD}LALGONDAR ARCHIVE AUDIT: {rec.input_path.name[:45]}{RESET} "
-    # Calculate visible length without ANSI codes for proper alignment
     print(f"{line} {header_text:<87}{line}")
     print(sep)
 
@@ -400,15 +443,16 @@ def print_single_card_red_white(rec: AuditRecord) -> None:
     print(f"{line}  {W_BOLD}Input File:{RESET}          {rec.input_path.name:<58}{line}")
     out_name = rec.output_path.name if rec.output_path else "-"
     print(f"{line}  {W_BOLD}Output File:{RESET}         {R_BOLD}{out_name:<58}{RESET}{line}")
-    
+
     if rec.output_path:
         out_folder = str(rec.output_path.parent)
         if len(out_folder) > 55:
             out_folder = "..." + out_folder[-52:]
         print(f"{line}  {W_BOLD}Destination:{RESET}         {out_folder:<58}{line}")
 
-    trans_str = f"Rhino {rec.orig_major_version} (v{rec.orig_archive_version}) ➔ Rhino {rec.new_major_version} (v{rec.new_archive_version})"
-    print(f"{line}  {W_BOLD}Archive Version:{RESET}     {trans_str:<58}{line}")
+    direction = "➔" if rec.orig_major_version <= rec.new_major_version else "➔"
+    trans_str = f"Rhino {rec.orig_major_version} (v{rec.orig_archive_version}) {direction} Rhino {rec.new_major_version} (v{rec.new_archive_version})"
+    print(f"{line}  {W_BOLD}Archive Transition:{RESET}  {trans_str:<58}{line}")
 
     size_str = f"{format_bytes(rec.orig_file_size)} ➔ {format_bytes(rec.new_file_size)}"
     print(f"{line}  {W_BOLD}File Size Delta:{RESET}     {size_str:<58}{line}")
@@ -492,7 +536,7 @@ def print_batch_table_red_white(records: List[AuditRecord]) -> None:
                 in_name,
                 out_name,
                 "SUCCESS",
-                f"{r.orig_major_version}➔7",
+                f"{r.orig_major_version}➔{r.new_major_version}",
                 str(r.total_objects),
                 str(r.brep_count),
                 str(r.extrusion_count),
@@ -520,7 +564,6 @@ def print_batch_table_red_white(records: List[AuditRecord]) -> None:
                 "-",
             ])
 
-    # Widths
     col_w = [len(h) for h in headers]
     for row in rows:
         for idx, val in enumerate(row):
@@ -544,7 +587,6 @@ def print_batch_table_red_white(records: List[AuditRecord]) -> None:
     for idx, val in enumerate(totals_row):
         col_w[idx] = max(col_w[idx], len(val))
 
-    # Borders
     top_b = f"{R_MED}╔" + "╦".join("═" * (w + 2) for w in col_w) + f"╗{RESET}"
     sep_h = f"{R_MED}╠" + "╬".join("═" * (w + 2) for w in col_w) + f"╣{RESET}"
     mid_s = f"{R_MED}╠" + "╬".join("═" * (w + 2) for w in col_w) + f"╣{RESET}"
@@ -552,32 +594,29 @@ def print_batch_table_red_white(records: List[AuditRecord]) -> None:
     bar   = f"{R_MED}║{RESET}"
 
     print("\n" + top_b)
-    # Header
     cells = [f" {W_BOLD}{h:<{col_w[i]}}{RESET} " for i, h in enumerate(headers)]
     print(bar + bar.join(cells) + bar)
     print(sep_h)
 
-    # Rows
     for r in rows:
         row_cells = []
         for i, val in enumerate(r):
-            if i == 2:  # Status
+            if i == 2:
                 if val == "SUCCESS":
                     val_str = f"{R_BOLD}{val:^{col_w[i]}}{RESET}"
                 elif val == "SKIPPED":
                     val_str = f"{W_BOLD}{val:^{col_w[i]}}{RESET}"
                 else:
                     val_str = f"{R_DARK}{val:^{col_w[i]}}{RESET}"
-            elif i == 3:  # Version
+            elif i == 3:
                 val_str = f"{W_MED}{val:^{col_w[i]}}{RESET}"
-            elif i >= 4:  # Numeric
+            elif i >= 4:
                 val_str = f"{W_BOLD if i == 4 else W_MED}{val:>{col_w[i]}}{RESET}"
             else:
                 val_str = f"{W_MED}{val:<{col_w[i]}}{RESET}"
             row_cells.append(f" {val_str} ")
         print(bar + bar.join(row_cells) + bar)
 
-    # Totals Row
     print(mid_s)
     tot_cells = []
     for i, val in enumerate(totals_row):
@@ -592,16 +631,20 @@ def print_batch_table_red_white(records: List[AuditRecord]) -> None:
     print(bot_b + "\n")
 
 
-def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_force: bool = False) -> None:
-    """Main interactive terminal loop for LALGONDAR."""
-    clear_screen()
-    print_banner()
-
+def run_interactive_loop(
+    preloaded_paths: Optional[List[str]] = None,
+    initial_target: int = DEFAULT_TARGET_VERSION,
+    initial_force: bool = False,
+) -> None:
+    """Main interactive terminal loop for LALGONDAR v2.0."""
+    target_version = initial_target
     force_mode = initial_force
     last_output_dir: Optional[Path] = None
 
+    clear_screen()
+    print_banner(target_version)
+
     if preloaded_paths:
-        # File(s) were dropped directly onto the .bat icon
         raw_inputs = preloaded_paths
     else:
         raw_inputs = []
@@ -609,13 +652,14 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
     while True:
         if not raw_inputs:
             print(f"{W_BOLD} [ DROPZONE / INPUT PROMPT ]{RESET}")
-            print(f"   {GRAY}• Drag & drop your Rhino 8 (.3dm) file directly here and press Enter.{RESET}")
-            print(f"   {GRAY}• Or paste an entire directory path to batch convert in place.{RESET}")
+            print(f"   {GRAY}• Drag & drop your Rhino file (.3dm) directly here and press Enter.{RESET}")
+            print(f"   {GRAY}• Or paste an entire directory path to batch convert.{RESET}")
+            print(f"   {GRAY}• Type {R_BOLD}'target'{RESET}{GRAY} or {R_BOLD}'t'{RESET}{GRAY} to change Target Version (Current: {W_BOLD}Rhino {target_version}.x{RESET}{GRAY}){RESET}")
             print(f"   {GRAY}• Type {R_BOLD}'force'{RESET}{GRAY} to toggle force mode (Current: {R_BOLD if force_mode else W_BOLD}{'ON' if force_mode else 'OFF'}{RESET}{GRAY}){RESET}")
             print(f"   {GRAY}• Type {R_BOLD}'q'{RESET}{GRAY} to exit.{RESET}\n")
 
             try:
-                user_entry = input(f" {R_BOLD}[LALGONDAR] »{RESET} {W_BOLD}").strip()
+                user_entry = input(f" {R_BOLD}[LALGONDAR ➔ v{target_version}] »{RESET} {W_BOLD}").strip()
                 print(f"{RESET}", end="")
             except (EOFError, KeyboardInterrupt):
                 print(f"\n{R_BOLD}[*] Exiting LALGONDAR converter. Goodbye!{RESET}")
@@ -625,8 +669,26 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
                 continue
 
             if user_entry.lower() in ("q", "quit", "exit"):
-                print(f"\n{R_BOLD}[*] Exiting LALGONDAR converter. Goodbye!{RESET}")
+                print(f"\n{R_BOLD}[*] Thank you for using LALGONDAR v{APP_VERSION} by {AUTHOR}. Goodbye!{RESET}")
                 break
+
+            if user_entry.lower() in ("t", "target"):
+                print(f"\n {R_BG} SELECT TARGET RHINO VERSION {RESET}")
+                print(f"   Available versions: {W_BOLD}2, 3, 4, 5, 6, 7, 8{RESET} (Default: 7)")
+                try:
+                    ver_input = input(f"   {R_BOLD}Enter target version [2-8]:{RESET} {W_BOLD}").strip()
+                    print(f"{RESET}", end="")
+                    new_ver = int(ver_input)
+                    if new_ver in SUPPORTED_VERSIONS:
+                        target_version = new_ver
+                        clear_screen()
+                        print_banner(target_version)
+                        print(f" {R_BOLD}[✓] Target version successfully set to: {W_BOLD}Rhino {target_version}.x{RESET}\n")
+                    else:
+                        print(f" {R_BOLD}[!] Invalid version. Keeping Rhino {target_version}.x{RESET}\n")
+                except ValueError:
+                    print(f" {R_BOLD}[!] Invalid input. Keeping Rhino {target_version}.x{RESET}\n")
+                continue
 
             if user_entry.lower() == "force":
                 force_mode = not force_mode
@@ -635,7 +697,7 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
 
             raw_inputs = parse_raw_input_paths(user_entry)
 
-        files, discovery_errors = collect_target_files(raw_inputs, recursive=True)
+        files, discovery_errors = collect_target_files(raw_inputs, recursive=True, target_version=target_version)
 
         for err in discovery_errors:
             print(f" {R_BOLD}[!] WARNING:{RESET} {err}")
@@ -646,7 +708,7 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
             continue
 
         tot_files = len(files)
-        print(f"\n {R_BG} CONVERSION IN PROGRESS {RESET} {W_BOLD}Found {tot_files} file{'s' if tot_files != 1 else ''} to process...{RESET}\n")
+        print(f"\n {R_BG} CONVERSION IN PROGRESS {RESET} {W_BOLD}Found {tot_files} file{'s' if tot_files != 1 else ''} ➔ Rhino {target_version}...{RESET}\n")
 
         records: List[AuditRecord] = []
         for idx, file_path in enumerate(files, start=1):
@@ -656,6 +718,7 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
 
             rec = convert_file(
                 input_path=file_path,
+                target_version=target_version,
                 force=force_mode,
                 overwrite=True,
             )
@@ -666,7 +729,7 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
                 if rec.output_path:
                     last_output_dir = rec.output_path.parent
             elif rec.status == "SKIPPED":
-                print(f"{W_BOLD}SKIPPED{RESET} (already <= v7)")
+                print(f"{W_BOLD}SKIPPED{RESET} ({rec.message})")
             else:
                 print(f"{R_DARK}FAILED{RESET} ({rec.message})")
 
@@ -675,6 +738,9 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
             print_single_card_red_white(records[0])
         else:
             print_batch_table_red_white(records)
+
+        # Print prominent author credit at the end of successful conversion!
+        print_credit_block()
 
         # Clear inputs for next loop iteration
         raw_inputs = []
@@ -685,11 +751,12 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
         print(f"{R_MED}│{RESET}    {R_BOLD}[1]{RESET} {W_BOLD}Convert another file or folder{RESET}{' ' * 42}{R_MED}│{RESET}")
         if last_output_dir and last_output_dir.exists():
             print(f"{R_MED}│{RESET}    {R_BOLD}[2]{RESET} {W_BOLD}Open output folder in Windows Explorer{RESET}{' ' * 34}{R_MED}│{RESET}")
-        print(f"{R_MED}│{RESET}    {R_BOLD}[3]{RESET} {W_BOLD}Exit LALGONDAR{RESET}{' ' * 58}{R_MED}│{RESET}")
+        print(f"{R_MED}│{RESET}    {R_BOLD}[3]{RESET} {W_BOLD}Change Target Version (Current: Rhino {target_version}.x){RESET}{' ' * (37 - len(str(target_version)))}{R_MED}│{RESET}")
+        print(f"{R_MED}│{RESET}    {R_BOLD}[4]{RESET} {W_BOLD}Exit LALGONDAR{RESET}{' ' * 58}{R_MED}│{RESET}")
         print(f"{R_MED}└─────────────────────────────────────────────────────────────────────────────┘{RESET}\n")
 
         try:
-            choice = input(f" {R_BOLD}[Choice 1-3] »{RESET} {W_BOLD}").strip()
+            choice = input(f" {R_BOLD}[Choice 1-4] »{RESET} {W_BOLD}").strip()
             print(f"{RESET}", end="")
         except (EOFError, KeyboardInterrupt):
             break
@@ -699,18 +766,33 @@ def run_interactive_loop(preloaded_paths: Optional[List[str]] = None, initial_fo
             os.startfile(str(last_output_dir))
             print()
             continue
-        elif choice in ("3", "q", "exit"):
-            print(f"\n{R_BOLD}[*] Thank you for using LALGONDAR(8-1)converter. Done!{RESET}\n")
+        elif choice == "3":
+            print(f"\n {R_BG} SELECT TARGET RHINO VERSION {RESET}")
+            print(f"   Available versions: {W_BOLD}2, 3, 4, 5, 6, 7, 8{RESET}")
+            try:
+                ver_input = input(f"   {R_BOLD}Enter target version [2-8]:{RESET} {W_BOLD}").strip()
+                print(f"{RESET}", end="")
+                new_ver = int(ver_input)
+                if new_ver in SUPPORTED_VERSIONS:
+                    target_version = new_ver
+                    clear_screen()
+                    print_banner(target_version)
+                    print(f" {R_BOLD}[✓] Target version successfully set to: {W_BOLD}Rhino {target_version}.x{RESET}\n")
+            except ValueError:
+                pass
+            continue
+        elif choice in ("4", "q", "exit"):
+            print(f"\n{R_BOLD}[*] Thank you for using LALGONDAR v{APP_VERSION} by {AUTHOR}. Done!{RESET}\n")
             break
         else:
             clear_screen()
-            print_banner()
+            print_banner(target_version)
             continue
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="LALGONDAR(8-1)converter - Rhino 8 to 7 Down-Converter.",
+        description=f"{APP_NAME} v{APP_VERSION} - Universal Rhino Version Converter by {AUTHOR}.",
         add_help=True,
     )
     parser.add_argument(
@@ -720,15 +802,26 @@ def main() -> int:
         help="One or more .3dm file or directory paths.",
     )
     parser.add_argument(
+        "-t",
+        "--target-version",
+        type=int,
+        choices=SUPPORTED_VERSIONS,
+        default=DEFAULT_TARGET_VERSION,
+        help=f"Target Rhino version (choices: 2, 3, 4, 5, 6, 7, 8; default: {DEFAULT_TARGET_VERSION}).",
+    )
+    parser.add_argument(
         "-f",
         "--force",
         action="store_true",
-        help="Force conversion even if already version 7.",
+        help="Force conversion even if already target version.",
     )
     args = parser.parse_args()
 
-    # Launch interactive loop (supports dropped files as args or interactive prompt)
-    run_interactive_loop(preloaded_paths=args.inputs if args.inputs else None, initial_force=args.force)
+    run_interactive_loop(
+        preloaded_paths=args.inputs if args.inputs else None,
+        initial_target=args.target_version,
+        initial_force=args.force,
+    )
     return 0
 
 

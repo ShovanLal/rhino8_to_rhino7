@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep obsidian background gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141416" />
+      <stop offset="100%" stop-color="#060607" />
+    </linearGradient>
+
+    <!-- Crimson armor gradient (Vertical Pillar) -->
+    <linearGradient id="crimson-v" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF1E27" />
+      <stop offset="100%" stop-color="#990006" />
+    </linearGradient>
+
+    <!-- Razor red gradient (Horizontal Horn/Blade) -->
+    <linearGradient id="crimson-h" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#D90416" />
+      <stop offset="100%" stop-color="#FF2A36" />
+    </linearGradient>
+
+    <!-- Drop shadow for 3D overlap effect -->
+    <filter id="armor-shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.9" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Software Icon Background -->
+  <rect width="512" height="512" rx="115" fill="url(#bg-grad)" stroke="#222226" stroke-width="3" />
+
+  <!-- Subtle Geometric Grid Accent (Tech Aesthetic) -->
+  <path d="M 140 0 L 140 512 M 380 0 L 380 512 M 0 380 L 512 380" stroke="#ffffff" stroke-opacity="0.02" stroke-width="2" />
+
+  <g filter="url(#armor-shadow)">
+    <!-- Vertical Armor Pillar of the 'L' -->
+    <path d="M 140 96 
+             L 240 146 
+             L 240 380 
+             L 140 380 
+             Z" fill="url(#crimson-v)" />
+
+    <!-- Negative-Space Shadow Cut (Creates the folded obsidian plate effect) -->
+    <polygon points="140,380 240,265 240,380" fill="#070709" opacity="0.65" />
+
+    <!-- Horizontal Rhino-Horn Blade of the 'L' -->
+    <path d="M 140 380 
+             L 210 290 
+             L 412 290 
+             L 362 380 
+             Z" fill="url(#crimson-h)" />
+
+    <!-- Cybernetic Razor Highlight along the fold -->
+    <line x1="140" y1="380" x2="210" y2="290" stroke="#FF7A82" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- Minimalist Core Node (Top Left) -->
+  <circle cx="172" cy="148" r="6" fill="#060607" />
+</svg>

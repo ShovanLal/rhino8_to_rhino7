@@ -118,7 +118,7 @@ def run_tests():
         # TEST 2: Convert single file via CLI
         print("\n[TEST 2] Converting single file to Rhino 7 via CLI...")
         cmd = [sys.executable, "lalgondar_converter.py", str(r8_file1)]
-        res = subprocess.run(cmd, input="3\n", capture_output=True, text=True, encoding="utf-8")
+        res = subprocess.run(cmd, input="4\n", capture_output=True, text=True, encoding="utf-8")
         print(res.stdout)
         if res.stderr:
             print("[STDERR]:", res.stderr)
@@ -138,18 +138,18 @@ def run_tests():
         assert len(v7_model.InstanceDefinitions) == len(initial_model.InstanceDefinitions), "Block count mismatch!"
         print("  ✓ All geometry types, layers, and blocks verified in version 7 file!")
 
-        # TEST 3: Pre-check & Validation: Skip if already version 7
+        # TEST 3: Pre-check & Validation: Skip if already target version
         print("\n[TEST 3] Pre-check test: Trying to convert already version 7 file...")
-        cmd_skip = [sys.executable, "lalgondar_converter.py", str(expected_v7_file)]
-        res_skip = subprocess.run(cmd_skip, input="3\n", capture_output=True, text=True, encoding="utf-8")
+        cmd_skip = [sys.executable, "lalgondar_converter.py", str(expected_v7_file), "-t", "7"]
+        res_skip = subprocess.run(cmd_skip, input="4\n", capture_output=True, text=True, encoding="utf-8")
         print(res_skip.stdout)
         assert "SKIPPED" in res_skip.stdout, "File should have been skipped!"
         print("  ✓ Successfully skipped version 7 file without --force.")
 
         # TEST 4: Force flag on already version 7 file
         print("\n[TEST 4] Pre-check test: Trying with --force flag...")
-        cmd_force = [sys.executable, "lalgondar_converter.py", str(expected_v7_file), "--force"]
-        res_force = subprocess.run(cmd_force, input="3\n", capture_output=True, text=True, encoding="utf-8")
+        cmd_force = [sys.executable, "lalgondar_converter.py", str(expected_v7_file), "--force", "-t", "7"]
+        res_force = subprocess.run(cmd_force, input="4\n", capture_output=True, text=True, encoding="utf-8")
         print(res_force.stdout)
         assert "OK" in res_force.stdout, "File should have been converted when --force was specified!"
         print("  ✓ Successfully forced conversion with --force.")
@@ -164,7 +164,7 @@ def run_tests():
         create_sample_r8_file(r8_file3, name="PartBeta")
 
         cmd_batch = [sys.executable, "lalgondar_converter.py", str(batch_src_dir)]
-        res_batch = subprocess.run(cmd_batch, input="3\n", capture_output=True, text=True, encoding="utf-8")
+        res_batch = subprocess.run(cmd_batch, input="4\n", capture_output=True, text=True, encoding="utf-8")
         print(res_batch.stdout)
         assert res_batch.returncode == 0, f"Batch conversion failed: {res_batch.stderr}"
 
